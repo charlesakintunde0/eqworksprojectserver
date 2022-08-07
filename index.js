@@ -2,10 +2,10 @@ const cors = require('cors');
 const express = require('express')
 const router = require('./routes');
 const app = express()
-const { rateLimiter} = require('./rateLimiter')
+const { customRedisRateLimiter} = require('./rateLimiter')
 
 
-// app.use(rateLimiter)
+// app.use(customRedisRateLimiter)
 app.use('/', cors() ,router)
 app.use(cors())
 app.use(express.static("public"));
