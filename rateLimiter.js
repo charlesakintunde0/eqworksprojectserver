@@ -1,173 +1,68 @@
-// const redisClient = require("./redis");
-// const moment = require('moment')
-
-
 const redis = require('redis')
 const redisClient = redis.createClient()
 const moment = require('moment')
 
-module.exports.rateLimiter = (req,res,next) => {
-  redisClient.exists(req.headers.user,(err,reply) => {
-    if(err) {
-      console.log("Redis not working...")
-      system.exit(0)
+redisClient.on('error', (err) => console.log('Redis Client Error', err));
+
+const WINDOW_SIZE_IN_HOURS = 24;
+const MAX_WINDOW_REQUEST_COUNT = 100;
+const WINDOW_LOG_INTERVAL_IN_HOURS = 1;
+
+module.exports.customRedisRateLimiter = async (req,res,next) => {
+  await redisClient.connect();
+  try {
+    // check that redis client exists
+    if (!redisClient) {
+      throw new Error('Redis client does not exist!');
+      process.exit(1);
     }
-    if(reply === 1) {
-      // user exists
-      // check time interval
-      redisClient.get(req.headers.user,(err,reply) => {
-        let data = JSON.parse(reply)
-        let currentTime = moment().unix()
-        let difference = (currentTime - data.startTime)/60
-        if(difference >= 1) {
-          let body = {
-            'count': 1,
-            'startTime': moment().unix()
-          }
-          redisClient.set(req.headers.user,JSON.stringify(body))
-          // allow the request
-          next()
-        }
-        if(difference < 1) {
-          if(data.count > 3) {
-            return res.json({"error": 1, "message": "throttled limit exceeded..."})
-          }
-          // update the count and allow the request
-          data.count++
-          redisClient.set(req.headers.user,JSON.stringify(data))
-          // allow request
-          next()
-        }
-      })
+    // fetch records of current user using IP address, returns null when no record is found
+    const record = await redisClient.get(req.ip);
+    const currentRequestTime = moment();
+    console.log(record);
+    //  if no record is found , create a new record for user and store to redis
+    if (record == null) {
+      let newRecord = [];
+      let requestLog = {
+        requestTimeStamp: currentRequestTime.unix(),
+        requestCount: 1,
+      };
+      newRecord.push(requestLog);
+      await redisClient.set(req.ip, JSON.stringify(newRecord));
+      next();
+    }
+    // if record is found, parse it's value and calculate number of requests users has made within the last window
+    let data = JSON.parse(record);
+    let windowStartTimestamp = moment().subtract(WINDOW_SIZE_IN_HOURS, 'hours').unix();
+    let requestsWithinWindow = data.filter((entry) => {
+      return entry.requestTimeStamp > windowStartTimestamp;
+    });
+    console.log('requestsWithinWindow', requestsWithinWindow);
+    let totalWindowRequestsCount = requestsWithinWindow.reduce((accumulator, entry) => {
+      return accumulator + entry.requestCount;
+    }, 0);
+    // if number of requests made is greater than or equal to the desired maximum, return error
+    if (totalWindowRequestsCount >= MAX_WINDOW_REQUEST_COUNT) {
+      res.status(429).jsend.error(`You have exceeded the ${MAX_WINDOW_REQUEST_COUNT} requests in ${WINDOW_SIZE_IN_HOURS} hrs limit!`);
     } else {
-      // add new user
-      let body = {
-        'count': 1,
-        'startTime': moment().unix()
+      // if number of requests made is less than allowed maximum, log new entry
+      let lastRequestLog = data[data.length - 1];
+      let potentialCurrentWindowIntervalStartTimeStamp = currentRequestTime.subtract(WINDOW_LOG_INTERVAL_IN_HOURS, 'hours').unix();
+      //  if interval has not passed since last request log, increment counter
+      if (lastRequestLog.requestTimeStamp > potentialCurrentWindowIntervalStartTimeStamp) {
+        lastRequestLog.requestCount++;
+        data[data.length - 1] = lastRequestLog;
+      } else {
+        //  if interval has passed, log new entry for current user and timestamp
+        data.push({
+          requestTimeStamp: currentRequestTime.unix(),
+          requestCount: 1,
+        });
       }
-      redisClient.set(req.headers.user,JSON.stringify(body))
-      // allow request
-      next()
+      await redisClient.set(req.ip, JSON.stringify(data));
+      next();
     }
-  })
+  } catch (error) {
+    next(error);
+  }
 }
-// module.exports.rateLimiter = async (req, res, next) => {
-//     const ip = req.connection.remoteAddress;
-
-//     const response = await redisClient.multi().incr(ip).expire(ip, 600).exec()
-//     console.log(response)
-//     // [response] = await redisClient
-//     //   .multi()
-//     //   .incr(ip)
-//     //   .expire(ip, secondsLimit)
-//     //   .exec();
-
-//     // if (response[1] > limitAmount)
-//     //   res.json({
-//     //     loggedIn: false,
-//     //     status: "Slow down!! Try again in a minute.",
-//     //   });
-//     // else next();
-
-//     next()
-//   };
-
-
-
-// const RedisServer = require('redis-server');
-
-// // Simply pass the port that you want a Redis server to listen on.
-// const server = new RedisServer();
-
-// server.open((err) => {
-//   if (err === null) {
-//     // You may now connect a client to the Redis
-//     // server bound to port 6379.
-//   }
-// });
-
-// //---------------------
-// module.exports.rateLimiter = (req, res, next) => {
-  
-//   //CHECK FOR EXISTING KEYS ON REDIS
-  
-//   // redisClient.keys('*', function (err, keys) {
-//   //   if (err) return console.log(err);
-//   //   console.log("keys are >>>>>>>> ", keys)
-//   // });       
-  
-  
-
-//   //POSSIBLE UNIQUE KEYS
-//   //req.ip REFERS TO WIFI IP, NOT MACHINE IP
-  
-//   // redisClient.exists(req.headers.user, (err, reply) => {
-//   // redisClient.exists("user1", (err, reply) => {
-
-//     const ip = req.connection.remoteAddress;
-//   redisClient.exists(ip, (err, reply) => {
-//     if (err) {
-//       console.log("Redis not working...")
-//       system.exit(0)
-//     }
-//     if (reply === 1) {
-//       // user exists
-//       // check time interval
-      
-//       redisClient.get(ip, (err, reply) => {
-        
-//         let data = JSON.parse(reply)
-//         console.log(" ACCESSES >>>>>>>>>>>>>>", data)
-//         let currentTime = moment().unix()
-//         let difference = (currentTime - data.startTime) / 60
-        
-//         if (difference >= 1) {
-//           // allow the request
-//           let body = {
-//             'count': 1,
-//             'startTime': moment().unix()
-//           }
-          
-//           redisClient.set(ip, JSON.stringify(body))
-          
-//           next()
-//         }
-        
-//         if (difference < 1) {
-//           //block the request
-//           if (data.count >= 20) {
-//             let countdown = (60 - ((moment().unix() - data.startTime)))
-
-//             let timeLeft = {"time": countdown} 
-
-//             //original code
-//             // return res.json({ "error": 1, "message": "throttled limit exceeded..." }) 
-
-//             //suggested status 426
-//             // return res.status(426).json({ "error": 1, "message": "throttled limit exceeded..." }) 
-
-//             //proper status 429
-//             // return res.status(429).json({ "error": 1, "retry in": `${countdown} seconds`, "message": "throttled limit exceeded..."})
-//             return res.status(429).render("rate_limit", timeLeft )
-//           }
-          
-//           // update the count and allow the request
-//           data.count++
-//           redisClient.set(ip, JSON.stringify(data))
-//           next()
-//         }
-//       })
-      
-//     } else {
-//       console.log("added new user")
-//       // add new user
-//       let body = {
-//         'count': 1,
-//         'startTime': moment().unix()
-//       }
-//       redisClient.set(req.ip, JSON.stringify(body))
-//       // allow request
-//       next()
-//     }
-//   })
-// }
