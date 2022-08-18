@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const {apiSource,eventsHourly,eventsDaily,statsDaily,statsHourly,eventsPoi,statsPoi,poi} = require('./controllers')
-const { rateLimiter } = require('./rateLimiter')
 const pg = require('pg')
 const dotenv = require('dotenv');
 dotenv.config();

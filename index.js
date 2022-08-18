@@ -2,11 +2,11 @@ const cors = require('cors');
 const express = require('express')
 const router = require('./routes');
 const app = express()
-const { customRedisRateLimiter} = require('./rateLimiter')
+const { rateLimiterMiddleware } = require('./createRateLimiter')
 
 
-// app.use(customRedisRateLimiter)
-app.use('/', cors() ,router)
+// connnect rate limiter middle ware to express server
+app.use('/',cors(),rateLimiterMiddleware,router)
 app.use(cors())
 app.use(express.static("public"));
 app.set("view engine", "ejs");
