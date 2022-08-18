@@ -7,6 +7,7 @@ const { rateLimiterMiddleware } = require('./createRateLimiter')
 
 // connnect rate limiter middle ware to express server
 app.use(rateLimiterMiddleware)
+
 app.use('/',cors(),router)
 app.use(cors())
 app.use(express.static("public"));
