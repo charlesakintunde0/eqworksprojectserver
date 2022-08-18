@@ -23,7 +23,7 @@
     "passport": "^0.6.0",
     "pg": "^8.5.1",
     "rate-limiter-flexible": "^2.3.8",
-    "redis": "^2.8.0",
+    "redis": "^3.1.1",
     "redis-server": "^1.2.2",
     "request-ip": "^3.3.0"
   },
