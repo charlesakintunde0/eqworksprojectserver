@@ -1,8 +1,12 @@
 const redis = require('redis');
-const redisClient = redis.createClient({no_ready_check: true}); // Create a new
+const dotenv = require('dotenv');
+dotenv.config();
 const moment = require('moment')
+const  {
+  REDIS_URL
+} = process.env
 
-
+const redisClient = redis.createClient({url: REDIS_URL,no_ready_check: true}); // Create a new
 
 redisClient.on('connect', function () {
     console.log("Connected to redis")
@@ -50,9 +54,6 @@ module.exports.rateLimiterMiddleware = (req, res, next) => {
              let countdown = (60 - ((moment().unix() - data.startTime)))
  
              let timeLeft =  countdown 
-
-            //  return res.status(429).render("rate_limit", timeLeft )
-            //  console.log(timeLeft)
             return res.status(429).send(`Your access in now being limited (Too many request!) , try again in ${timeLeft} seconds`)
            }
            
